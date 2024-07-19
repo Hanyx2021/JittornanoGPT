@@ -235,6 +235,9 @@ while True:
     # step the optimizer and scaler if training in fp16
     # scaler.step(optimizer)
     # scaler.update()
+    
+    print(f'iter = {iter_num}, lr = {[param_group["lr"] for param_group in optimizer.param_groups]}')
+    
     optimizer.step()
     # flush the gradients as soon as we can, no need for this memory anymore
     optimizer.zero_grad()
