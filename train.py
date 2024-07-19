@@ -10,6 +10,9 @@ import jittor as jt
 
 from model import GPTConfig, GPT
 
+
+start_time = time.time()
+
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
@@ -254,3 +257,7 @@ while True:
     # termination conditions
     if iter_num > max_iters:
         break
+
+
+end_time = time.time()
+print(f"Total time = {end_time - start_time:.2f} s")
