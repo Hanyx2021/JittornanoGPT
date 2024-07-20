@@ -18,11 +18,15 @@ def plot_loss_curves(files):
     plt.figure(figsize=(10, 6))
     for file_path in files:
         iter_nums, loss_values = parse_loss_from_log(file_path)
-        plt.plot(iter_nums, loss_values, label=file_path.split('.')[0])
+        plt.plot(iter_nums, loss_values, label='.'.join(file_path.split('.')[:-1]))
     plt.xlabel('Iteration')
     plt.ylabel('Loss')
     plt.title('Train Loss')
     plt.legend()
     plt.savefig('train_loss.png')
 
-plot_loss_curves(['nanoGPT-Jittor.log', 'nanoGPT-Pytorch.log'])
+plot_loss_curves([
+    'nanoGPT-Jittor1.3.9.10-CSCG03.log', 'nanoGPT-Pytorch-CSCG03.log',
+    'nanoGPT-Jittor1.3.8.5-CSCG03.log',
+    # 'nanoGPT-Jittor1.3.8.5-CSCG00.log',  'nanoGPT-Pytorch-CSCG00.log',
+])
