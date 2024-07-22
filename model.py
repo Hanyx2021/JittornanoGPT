@@ -58,7 +58,11 @@ class CausalSelfAttention(nn.Module):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        q, k, v  = self.c_attn(x).split(self.n_embd, dim=2)
+
+        # q, k, v  = self.c_attn(x).split(self.n_embd, dim=2)
+        qkv = self.c_attn(x)
+        q, k, v = qkv[:, :, 0:self.n_embd], qkv[:, :, self.n_embd: 2*self.n_embd], qkv[:, :, 2*self.n_embd: 3*self.n_embd]
+        
         k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
@@ -180,8 +184,16 @@ class GPT(nn.Module):
         pos = jt.arange(0, t, dtype=jt.Var.int32) #, device=device) # shape (t)
 
         # forward the GPT model itself
-        tok_emb = self.transformer[0](idx) # token embeddings of shape (b, t, n_embd)
-        pos_emb = self.transformer[1](pos) # position embeddings of shape (t, n_embd)
+        # tok_emb = self.transformer[0](idx) # token embeddings of shape (b, t, n_embd)
+        # pos_emb = self.transformer[1](pos) # position embeddings of shape (t, n_embd)
+        
+        # import numpy as np
+        # tok_emb = jt.array(np.random.randint(0, 1e5, size=(b, t, self.config.n_embd)), dtype=jt.float32)
+        # pos_emb = jt.array(np.random.randint(0, 1e5, size=(t, self.config.n_embd)), dtype=jt.float32)
+        
+        tok_emb = jt.ones(b, t, self.config.n_embd)
+        pos_emb = jt.ones(t, self.config.n_embd)
+        
         x = self.transformer[2](tok_emb + pos_emb)
         for block in self.transformer[3]:
             x = block(x)
@@ -333,3 +345,28 @@ class GPT(nn.Module):
                 idx = jt.concat((idx, idx_next), dim=1)
 
             return idx
+
+
+if __name__ == '__main__':
+    @dataclass
+    class GPTConfig1:
+        block_size: int = 512
+        vocab_size: int = 50304 # GPT-2 vocab_size of 50257, padded up to nearest multiple of 64 for efficiency
+        n_layer: int = 4
+        n_head: int = 4
+        n_embd: int = 512
+        dropout: float = 0.0
+        bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+        
+    # simple test of model creation
+    gpt = GPT(GPTConfig1())
+    print(gpt)
+    print(f"number of parameters: {gpt.get_num_params()}")
+
+    optimizer = gpt.configure_optimizers(0.1, 3e-4, (0.9, 0.95))
+
+    # simple test of model forward pass
+    idx = jt.ones((2, 2))
+    logits, loss = gpt(idx, idx)
+    print(logits.shape, loss)
+    optimizer.step(loss)

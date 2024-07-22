@@ -83,24 +83,31 @@ ctx = nullcontext() # if device_type == 'cpu' else torch.amp.autocast(device_typ
 
 # poor man's data loader
 data_dir = os.path.join('data', dataset)
-def get_batch(split):
-    # We recreate np.memmap every batch to avoid a memory leak, as per
-    # https://stackoverflow.com/questions/45132940/numpy-memmap-memory-usage-want-to-iterate-once/61472122#61472122
-    if split == 'train':
-        data = np.memmap(os.path.join(data_dir, 'train.bin'), dtype=np.uint16, mode='r')
-    else:
-        data = np.memmap(os.path.join(data_dir, 'val.bin'), dtype=np.uint16, mode='r')
-    ix = jt.randint(len(data) - block_size, shape = (batch_size,))
+# def get_batch(split):
+#     # We recreate np.memmap every batch to avoid a memory leak, as per
+#     # https://stackoverflow.com/questions/45132940/numpy-memmap-memory-usage-want-to-iterate-once/61472122#61472122
+#     if split == 'train':
+#         data = np.memmap(os.path.join(data_dir, 'train.bin'), dtype=np.uint16, mode='r')
+#     else:
+#         data = np.memmap(os.path.join(data_dir, 'val.bin'), dtype=np.uint16, mode='r')
+
+#     ix = jt.array(np.random.randint(0, len(data) - block_size, size=(batch_size,)))
+#     # ix = jt.randint(len(data) - block_size, shape = (batch_size,))
     
-    data = np.array(data)
-    # TODO : type <memmap> not support for jittor array
-    x = jt.stack([jt.array((data[i:i+block_size]).astype(np.int64)) for i in ix])
-    y = jt.stack([jt.array((data[i+1:i+1+block_size]).astype(np.int64)) for i in ix])
-    """if device_type == 'cuda':
-        # pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
-        x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
-    else:
-        x, y = x.to(device), y.to(device)"""
+#     data = np.array(data)
+#     # TODO : type <memmap> not support for jittor array
+#     x = jt.stack([jt.array((data[i:i+block_size]).astype(np.int64)) for i in ix])  # shape = (64, 256)
+#     y = jt.stack([jt.array((data[i+1:i+1+block_size]).astype(np.int64)) for i in ix])  # shape = (64, 256)    
+#     """if device_type == 'cuda':
+#         # pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
+#         x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
+#     else:
+#         x, y = x.to(device), y.to(device)"""
+#     return x, y
+
+def get_batch(split):
+    x = jt.ones((64, 256), dtype='int')
+    y = jt.zeros((64, 256), dtype='int')
     return x, y
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
@@ -219,6 +226,8 @@ while True:
     for micro_step in range(gradient_accumulation_steps):
         with ctx:
             logits, loss = model(X, Y)
+            # jt.sync_all(True)
+            # print('loss = ', loss)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
         X, Y = get_batch('train')
@@ -235,9 +244,6 @@ while True:
     # step the optimizer and scaler if training in fp16
     # scaler.step(optimizer)
     # scaler.update()
-    
-    print(f'iter = {iter_num}, lr = {[param_group["lr"] for param_group in optimizer.param_groups]}')
-    
     optimizer.step()
     # flush the gradients as soon as we can, no need for this memory anymore
     optimizer.zero_grad()
@@ -253,7 +259,7 @@ while True:
         if local_iter_num >= 5: # let the training loop settle a bit
             mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt)
             running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
-        print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
+        print(f"iter {iter_num}: loss {lossf:.10f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
     iter_num += 1
     local_iter_num += 1
 
